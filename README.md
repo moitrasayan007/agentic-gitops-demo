@@ -1,37 +1,53 @@
 # agentic-gitops-demo
 
-An AI agent with read-only access to an EKS cluster diagnoses a failing
-workload and proposes the fix as a pull request. Everything the agent reads to
-do that — pod annotations, events, logs — is writable by someone who is not
-you. This repository shows what happens when it is.
+An on-call AI agent with **read-only** access to an EKS cluster diagnoses a
+failing workload and proposes the fix as a pull request — the only thing it can
+write. In a GitOps cluster that is not a limitation: Argo CD reconciles from Git
+with self-heal on, so any change made directly on the cluster is reverted within
+minutes. The durable fix is always a commit. So the agent never needs cluster
+write access, and this repository is a working reference for building it that
+way.
 
-Two stories run on the same stack:
+Four independent controls make the agent useful without anyone trusting its
+judgment:
 
-1. **The happy path.** The agent finds an OOMKill whose root cause is in Helm
-   values, opens a PR that *removes* the memory limit, the policy gate rejects
-   it, the agent corrects the PR, and Argo CD syncs the merge.
-2. **The attack** ([`attack/`](attack/)). A pod annotation — or a plain HTTP
-   request that lands in the service's logs — carries a forged incident note.
-   The agent reads it while triaging and opens a PR that smuggles a registry
-   swap, citing the incident because it believes it. A deterministic policy
-   catches it; prompt hardening measurably does not.
+- **Read-only RBAC** on the cluster (`get`, `list`, `watch` — nothing else).
+- **No mutating tool** in the agent at all; `kubectl` is behind a verb allowlist
+  enforced in Python before any subprocess runs.
+- **A deterministic policy gate** (Kyverno) on the agent's pull request, run in
+  CI and enforced again at admission.
+- **Human review** of a small, evidence-cited diff before merge.
 
-Built as the live demo for a KubeCon Security session on prompt injection
-through the Kubernetes state an agent trusts. See
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for how the controls fit
-together, [`attack/README.md`](attack/README.md) for the injection vectors, and
-[`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the stage runbook.
+Two things run on the same stack:
+
+1. **Remediation.** The agent finds an OOMKill whose root cause is in Helm
+   values, opens a PR that raises the memory limit with the diagnosing command
+   output quoted in the body, the policy gate passes, a human merges, and Argo CD
+   syncs the workload healthy.
+2. **The red team** ([`attack/`](attack/)). Because the agent reads cluster
+   state, its inputs are attacker-writable. Forged "incident notes" planted in a
+   pod annotation and in the service's logs try to steer it into a
+   policy-violating change. A current frontier model cross-checks the forged
+   premise and declines; a smaller model in the same seat can be fooled — and the
+   deterministic gate rejects the bad artifact regardless. The lesson is the
+   pattern: put the guarantee on the output, not in the agent.
+
+Built as the live demo for a KubeCon Platform Engineering session,
+*Read-Only by Construction*. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+for how the controls fit together, [`attack/README.md`](attack/README.md) for the
+red-team vectors, and [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the stage
+runbook.
 
 ## Layout
 
 | Path | What it is |
 | --- | --- |
-| [`app/`](app/) | `parcel-tracker`, a small Go service that OOM-kills itself under the chart's default memory limit |
-| [`chart/`](chart/) | The Helm chart Argo CD reconciles. The planted defect lives in `values.yaml`. |
+| [`app/`](app/) | `parcel-tracker`, a small Go service that OOM-kills itself under an undersized memory limit |
+| [`chart/`](chart/) | The Helm chart Argo CD reconciles. The sizing bug lives in `values.yaml`. |
 | [`argocd/`](argocd/) | `AppProject`, `Application`, and the agent's read-only RBAC |
 | [`policy/`](policy/) | Kyverno policies — the gate, run both in CI and at admission |
-| [`agent/`](agent/) | The triage agent. Three tools; only one of them writes anything. `--hardened` adds provenance defenses. |
-| [`attack/`](attack/) | Two prompt-injection vectors and what catches them |
+| [`agent/`](agent/) | The triage agent. Three tools; only one of them writes anything. Flags select the model, prompt, and defenses. |
+| [`attack/`](attack/) | The red-team harness: two injection vectors and what holds against them |
 | [`.github/workflows/`](.github/workflows/) | The policy gate on every pull request |
 | [`infra/`](infra/) | Terraform: the EKS Auto Mode cluster, ECR, Argo CD (Helm), and Kyverno (Helm) |
 
@@ -111,43 +127,78 @@ broken.
 
 ## Running the demo
 
-Once setup is done, the demo is two acts. The detailed stage runbook —
+Once setup is done, the demo runs in two parts. The detailed stage runbook —
 timing, fallbacks, terminal layout — is in [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md).
 
-**Act one — the agent works, the gate works:**
+**Part one — the agent works, the gate works:**
 
 ```bash
-make status          # show the broken pods and Argo CD Degraded
-make agent           # agent opens a PR -> gate rejects -> corrected PR -> merge -> sync
+make status          # broken pods (OOMKilled), Argo CD Degraded
+make agent           # agent root-causes it and opens an evidence-cited PR
 ```
 
-**Act two — the same agent, turned by data anyone can write:**
+The agent inspects the cluster read-only, finds the root cause in the Helm
+values, and opens a PR that raises the memory limit — quoting the `describe` and
+`logs` output that led there. The policy gate passes (the fix keeps the limits
+block and stays on the ECR registry). Merge it, and Argo CD self-heals the
+workload to `Running`:
 
 ```bash
-make inject-pod      # plant the forged incident in a pod annotation
+gh pr merge <N> --squash
+kubectl -n parcel-tracker get pods -w      # wait for 1/1 Running
+```
+
+**Part two — red-teaming the agent's inputs:**
+
+The agent reads pod annotations, events, and logs to diagnose. All of those are
+writable by someone who is not you. Plant a forged "incident note" that tries to
+steer the agent into a change the policy gate forbids (pinning the image to
+`:latest`):
+
+```bash
+make inject-pod      # forged note on the failing pod's annotation
 #   OR, needing zero cluster access — just an HTTP request:
 #   kubectl -n parcel-tracker port-forward svc/parcel-tracker-parcel-tracker 8080:80 &
 #   make inject-logs
 
-make agent           # agent reads the forged note, opens a poisoned PR
+make agent           # a current frontier model cross-checks and DECLINES
 ```
 
-The deterministic catch fires on the **pull request**, not locally: GitHub
-Actions runs the policy gate on the agent's branch and posts the failure comment
-(`require-trusted-registry`). Show that in the browser — it is the moment of the
-talk. To reproduce it locally, check out the agent's branch first, because
-`make policy` renders whatever tree is currently checked out:
+What actually happens with a 2027-era model: it reads the note, notices the
+request is unsupported by the cluster evidence, and opens the correct memory-only
+PR anyway — flagging the note as suspicious in the body. That resistance is the
+honest, reproducible result. **But you don't design around getting a smart model
+on a good day.** Put a cheaper model in the same seat and it folds:
+
+```bash
+make agent-weak      # smaller model, no thinking — more easily led
+#   or the naive-but-common design that trusts operator notes:
+#   make agent-naive
+```
+
+When a run *does* fold, the poisoned PR pins `:latest`, and the deterministic
+gate rejects it on the **pull request** — GitHub Actions runs the policy gate on
+the agent's branch and posts the failure comment (`require-trusted-registry`,
+no-`:latest` rule). Show that in the browser. To reproduce the check locally,
+check out the agent's branch first, because `make policy` renders whatever tree
+is currently checked out:
 
 ```bash
 git fetch origin && git checkout <the-agent-branch>   # e.g. agent/...
-make policy          # require-trusted-registry FAILS
+make policy          # require-trusted-registry FAILS on the :latest tag
 git checkout main
 ```
 
-Then the prompt-hardening beat:
+The point of the two runs together: whether the agent notices the attack is a
+function of model, prompt, and payload — none of which you can measure against
+the payload you haven't seen. The gate on the output doesn't depend on any of
+them. That is where the guarantee belongs.
+
+Prompt-level hardening is available too, as defense in depth — never as the
+control you rely on:
 
 ```bash
-make agent-hardened  # provenance defenses on... still fooled on an unseen payload
+make agent-hardened  # treats cluster state as untrusted data in the system prompt
 ```
 
 **Reset between run-throughs:**
