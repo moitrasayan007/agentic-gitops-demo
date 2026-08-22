@@ -15,19 +15,19 @@ service:
 # Size of the in-memory route cache the app allocates at startup.
 cacheMB: 192
 
-# The demo's planted defect: the container is capped at 64Mi while the app
-# warms a 192 MiB cache, so it is OOMKilled during startup and never goes Ready.
+# The container warms a cacheMB (192 MiB) in-memory route cache at startup, so
+# the memory limit must exceed that plus runtime overhead. At 64Mi the process
+# was OOMKilled during cache warmup and never reached Ready. 256Mi leaves
+# headroom above the 192 MiB cache.
 #
-# Set memory to 256Mi to see the healthy state. Leave it at 64Mi to run the
-# incident. Do NOT delete the limits block -- the policy gate rejects workloads
-# without one, which is the second half of the demo.
+# Keep the limits block: the policy gate rejects workloads without one.
 resources:
   requests:
     cpu: 50m
     memory: 32Mi
   limits:
     cpu: 500m
-    memory: 64Mi
+    memory: 256Mi
 
 podSecurityContext:
   runAsNonRoot: true
