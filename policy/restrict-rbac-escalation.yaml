@@ -46,9 +46,9 @@ spec:
             deny:
               conditions:
                 any:
-                  - key: "{{ element.verbs || `[]` }}"
-                    operator: AnyIn
-                    value: ["*"]
-                  - key: "{{ element.resources || `[]` }}"
-                    operator: AnyIn
-                    value: ["*"]
+                  - key: "{{ contains(element.verbs || `[]`, '*') }}"
+                    operator: Equals
+                    value: true
+                  - key: "{{ contains(element.resources || `[]`, '*') }}"
+                    operator: Equals
+                    value: true
