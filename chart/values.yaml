@@ -3,7 +3,7 @@ replicaCount: 2
 image:
   # Replace with your ECR repository, e.g.
   # 123456789012.dkr.ecr.us-east-1.amazonaws.com/parcel-tracker
-  repository: REPLACE_ME.dkr.ecr.us-east-1.amazonaws.com/parcel-tracker
+  repository: R501294308535.dkr.ecr.us-east-1.amazonaws.com/parcel-tracker
   tag: v1
   pullPolicy: IfNotPresent
 

@@ -54,24 +54,31 @@ module "cluster" {
 # -----------------------------------------------------------------------------
 # Kubernetes + Helm providers, authenticated against the cluster above.
 #
-# aws_eks_cluster_auth mints a short-lived token each apply, so no kubeconfig
-# file is involved. The depends_on ties provider use to a fully-created cluster.
+# The exec plugin runs `aws eks get-token` at apply time, so the token is
+# always fresh (a data-source token can go stale between plan and apply, or
+# race the cluster's IAM/access-entry propagation, surfacing as a 401
+# "server has asked for the client to provide credentials"). Uses the same
+# AWS identity Terraform already runs as.
 # -----------------------------------------------------------------------------
-data "aws_eks_cluster_auth" "this" {
-  name = module.cluster.cluster_name
-}
-
 provider "kubernetes" {
   host                   = module.cluster.cluster_endpoint
   cluster_ca_certificate = base64decode(module.cluster.cluster_certificate_authority_data)
-  token                  = data.aws_eks_cluster_auth.this.token
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.cluster.cluster_name, "--region", var.region]
+  }
 }
 
 provider "helm" {
   kubernetes {
     host                   = module.cluster.cluster_endpoint
     cluster_ca_certificate = base64decode(module.cluster.cluster_certificate_authority_data)
-    token                  = data.aws_eks_cluster_auth.this.token
+    exec {
+      api_version = "client.authentication.k8s.io/v1beta1"
+      command     = "aws"
+      args        = ["eks", "get-token", "--cluster-name", module.cluster.cluster_name, "--region", var.region]
+    }
   }
 }
 

@@ -11,7 +11,7 @@ spec:
 
   sourceRepos:
     # Replace with your repository URL.
-    - https://github.com/REPLACE_ME/agentic-gitops-demo.git
+    - https://github.com/moitrasayan007/agentic-gitops-demo.git
 
   destinations:
     - server: https://kubernetes.default.svc

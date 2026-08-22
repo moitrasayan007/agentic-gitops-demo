@@ -10,7 +10,7 @@ spec:
 
   source:
     # Replace with your repository URL.
-    repoURL: https://github.com/REPLACE_ME/agentic-gitops-demo.git
+    repoURL: https://github.com/moitrasayan007/agentic-gitops-demo.git
     targetRevision: main
     path: chart
     helm:

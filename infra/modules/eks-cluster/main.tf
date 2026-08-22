@@ -62,10 +62,10 @@ module "eks" {
   authentication_mode                      = "API_AND_CONFIG_MAP"
   enable_cluster_creator_admin_permissions = true
 
-  # Create-time-only flag, inert after the cluster exists - pin it to the
-  # value already recorded in state so enabling Auto Mode below is an
-  # in-place update instead of forcing full cluster replacement.
-  bootstrap_self_managed_addons = true
+  # EKS Auto Mode requires this off: Auto Mode manages the core add-ons
+  # itself, and CreateCluster rejects the request when both are set.
+  # (Create-time-only flag; inert once the cluster exists.)
+  bootstrap_self_managed_addons = false
 
   # Root user has no EKS access by default (AWS console "Unauthorized" when
   # browsing cluster resources as root) - grant it cluster-admin explicitly.
