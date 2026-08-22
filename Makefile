@@ -4,6 +4,7 @@ REGISTRY    ?= $(ACCOUNT).dkr.ecr.$(REGION).amazonaws.com
 IMAGE       ?= $(REGISTRY)/parcel-tracker
 TAG         ?= v1
 NAMESPACE   ?= parcel-tracker
+PY          ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 
 .PHONY: help
 help:
@@ -74,15 +75,15 @@ status: ## Show the workload's current state -- the demo's opening shot
 
 .PHONY: agent
 agent: ## Run the triage agent against the live cluster
-	python agent/triage_agent.py --namespace $(NAMESPACE)
+	$(PY) agent/triage_agent.py --namespace $(NAMESPACE)
 
 .PHONY: agent-dry-run
 agent-dry-run: ## Diagnose only; the pull-request tool is withheld
-	python agent/triage_agent.py --namespace $(NAMESPACE) --dry-run
+	$(PY) agent/triage_agent.py --namespace $(NAMESPACE) --dry-run
 
 .PHONY: agent-hardened
 agent-hardened: ## Run the agent with provenance hardening against injection
-	python agent/triage_agent.py --namespace $(NAMESPACE) --hardened
+	$(PY) agent/triage_agent.py --namespace $(NAMESPACE) --hardened
 
 .PHONY: inject-pod
 inject-pod: ## Plant the prompt-injection pod (needs create-pod access)
