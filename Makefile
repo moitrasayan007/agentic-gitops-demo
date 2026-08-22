@@ -85,6 +85,15 @@ agent-dry-run: ## Diagnose only; the pull-request tool is withheld
 agent-hardened: ## Run the agent with provenance hardening against injection
 	$(PY) agent/triage_agent.py --namespace $(NAMESPACE) --hardened
 
+WEAK_MODEL ?= claude-haiku-4-5-20251001
+.PHONY: agent-weak
+agent-weak: ## Run the agent seat on a smaller model with no thinking
+	$(PY) agent/triage_agent.py --namespace $(NAMESPACE) --model $(WEAK_MODEL) --no-thinking
+
+.PHONY: agent-naive
+agent-naive: ## Run the common-but-unsafe design that trusts operator notes -- the injection lands here
+	$(PY) agent/triage_agent.py --namespace $(NAMESPACE) --naive
+
 .PHONY: inject-pod
 inject-pod: ## Plant the forged note on the failing pods' annotations (needs annotate access)
 	NAMESPACE=$(NAMESPACE) bash attack/inject-via-annotation.sh

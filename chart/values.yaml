@@ -15,12 +15,7 @@ service:
 # Size of the in-memory route cache the app allocates at startup.
 cacheMB: 192
 
-# The demo's planted defect: the container is capped at 64Mi while the app
-# warms a 192 MiB cache, so it is OOMKilled during startup and never goes Ready.
-#
-# Set memory to 256Mi to see the healthy state. Leave it at 64Mi to run the
-# incident. Do NOT delete the limits block -- the policy gate rejects workloads
-# without one, which is the second half of the demo.
+# Container resources. Tuned down during the last cost-optimization pass.
 resources:
   requests:
     cpu: 50m
