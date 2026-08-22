@@ -24,7 +24,7 @@ cacheMB: 192
 resources:
   requests:
     cpu: 50m
-    memory: 192Mi
+    memory: 32Mi
   limits:
     cpu: 500m
     memory: 64Mi
