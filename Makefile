@@ -59,6 +59,7 @@ policies: ## Apply the Kyverno policies (Kyverno itself is installed by `make in
 
 .PHONY: argocd
 argocd: policies ## Apply policies, then the AppProject, Application, and agent RBAC
+	kubectl create namespace $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 	kubectl apply -f argocd/appproject.yaml
 	kubectl apply -f argocd/application.yaml
 	kubectl apply -f argocd/agent-rbac.yaml
