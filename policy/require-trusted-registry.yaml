@@ -1,0 +1,57 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-trusted-registry
+  annotations:
+    policies.kyverno.io/title: Require Images From The Account ECR Registry
+    policies.kyverno.io/category: Supply Chain
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Images must come from this account's ECR registry and must not use a
+      mutable tag. An agent asked to "try a newer build" will happily reach for
+      a public image or for :latest; both break the guarantee that what Git says
+      is running is what is actually running.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: images-from-ecr
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Images must be pulled from *.dkr.ecr.*.amazonaws.com. Public registry
+          images are not permitted in this cluster.
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ regex_match('^[0-9]{12}\\.dkr\\.ecr\\.[a-z0-9-]+\\.amazonaws\\.com/.+$', '{{ element.image }}') }}"
+                    operator: Equals
+                    value: false
+
+    - name: no-mutable-tags
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          The ':latest' tag is not permitted. Pin an explicit tag or digest so a
+          rollback in Git is a real rollback.
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.image }}"
+                    operator: Equals
+                    value: "*:latest"
+                  - key: "{{ contains('{{ element.image }}', ':') }}"
+                    operator: Equals
+                    value: false

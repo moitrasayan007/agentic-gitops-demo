@@ -1,0 +1,54 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: restrict-rbac-escalation
+  annotations:
+    policies.kyverno.io/title: Restrict Binding To Cluster-Admin
+    policies.kyverno.io/category: RBAC
+    policies.kyverno.io/severity: critical
+    policies.kyverno.io/description: >-
+      No RoleBinding or ClusterRoleBinding in this repository may grant
+      cluster-admin, and no wildcard ClusterRole may be created. If an agent can
+      widen its own permissions through a merged pull request, every other
+      guardrail in this repository is decorative.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: no-cluster-admin-binding
+      match:
+        any:
+          - resources:
+              kinds:
+                - RoleBinding
+                - ClusterRoleBinding
+      validate:
+        message: >-
+          Binding to cluster-admin is not permitted. Grant a narrowly scoped
+          Role instead and say in the pull request why it is needed.
+        pattern:
+          roleRef:
+            name: "!cluster-admin"
+
+    - name: no-wildcard-cluster-roles
+      match:
+        any:
+          - resources:
+              kinds:
+                - ClusterRole
+                - Role
+      validate:
+        message: >-
+          Wildcard verbs or resources ('*') are not permitted in Roles created
+          from this repository. Enumerate exactly what is needed.
+        foreach:
+          - list: "request.object.rules[]"
+            deny:
+              conditions:
+                any:
+                  - key: "*"
+                    operator: AnyIn
+                    value: "{{ element.verbs || [] }}"
+                  - key: "*"
+                    operator: AnyIn
+                    value: "{{ element.resources || [] }}"

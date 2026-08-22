@@ -1,0 +1,55 @@
+replicaCount: 2
+
+image:
+  # Replace with your ECR repository, e.g.
+  # 123456789012.dkr.ecr.us-east-1.amazonaws.com/parcel-tracker
+  repository: REPLACE_ME.dkr.ecr.us-east-1.amazonaws.com/parcel-tracker
+  tag: v1
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# Size of the in-memory route cache the app allocates at startup.
+cacheMB: 192
+
+# The demo's planted defect: the container is capped at 64Mi while the app
+# warms a 192 MiB cache, so it is OOMKilled during startup and never goes Ready.
+#
+# Set memory to 256Mi to see the healthy state. Leave it at 64Mi to run the
+# incident. Do NOT delete the limits block -- the policy gate rejects workloads
+# without one, which is the second half of the demo.
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    cpu: 500m
+    memory: 64Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  privileged: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Startup probe rather than readiness alone: cache warmup legitimately takes a
+# few seconds, and we do not want the demo's failure mode confused with a
+# probe that is simply too impatient.
+startupProbe:
+  failureThreshold: 30
+  periodSeconds: 2
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

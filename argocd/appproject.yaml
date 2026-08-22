@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: parcel-tracker
+  namespace: argocd
+spec:
+  description: >-
+    Demo project for agent-proposed changes. Deliberately narrow: the blast
+    radius of anything merged into this repository stops at one namespace and a
+    short list of kinds.
+
+  sourceRepos:
+    # Replace with your repository URL.
+    - https://github.com/REPLACE_ME/agentic-gitops-demo.git
+
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: parcel-tracker
+
+  # No cluster-scoped resources at all. A merged pull request cannot create a
+  # ClusterRoleBinding even if the policy gate were somehow bypassed.
+  clusterResourceWhitelist: []
+
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ConfigMap
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+
+  namespaceResourceBlacklist:
+    - group: ""
+      kind: Secret
+    - group: rbac.authorization.k8s.io
+      kind: Role
+    - group: rbac.authorization.k8s.io
+      kind: RoleBinding
+
+  roles:
+    # Token used by the triage agent. Read-only: it can look, it cannot sync.
+    # The agent's only write path to the cluster is a pull request.
+    - name: read-only
+      description: Read-only access for the triage agent
+      policies:
+        - p, proj:parcel-tracker:read-only, applications, get, parcel-tracker/*, allow
+        - p, proj:parcel-tracker:read-only, logs, get, parcel-tracker/*, allow
+        - p, proj:parcel-tracker:read-only, applications, sync, parcel-tracker/*, deny
+        - p, proj:parcel-tracker:read-only, applications, update, parcel-tracker/*, deny
+        - p, proj:parcel-tracker:read-only, applications, delete, parcel-tracker/*, deny

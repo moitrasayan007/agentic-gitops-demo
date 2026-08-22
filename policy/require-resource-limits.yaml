@@ -1,0 +1,39 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+  annotations:
+    policies.kyverno.io/title: Require CPU and Memory Limits
+    policies.kyverno.io/category: Resource Management
+    policies.kyverno.io/severity: medium
+    policies.kyverno.io/description: >-
+      Every container must declare CPU and memory limits. This is the policy an
+      agent trips when it "fixes" an OOMKill by deleting the limit instead of
+      raising it -- a change that makes the symptom disappear locally and turns
+      one bad pod into a noisy-neighbour incident in production.
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: check-container-limits
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Container '{{ request.object.metadata.name }}' must set
+          resources.limits.cpu and resources.limits.memory. Raise a limit that
+          is too low; do not remove it.
+        foreach:
+          - list: "request.object.spec.containers"
+            deny:
+              conditions:
+                any:
+                  - key: "{{ element.resources.limits.memory || '' }}"
+                    operator: Equals
+                    value: ""
+                  - key: "{{ element.resources.limits.cpu || '' }}"
+                    operator: Equals
+                    value: ""

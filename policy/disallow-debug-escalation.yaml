@@ -1,0 +1,70 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: disallow-debug-escalation
+  annotations:
+    policies.kyverno.io/title: Disallow Privileged Containers and Host Mounts
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+    policies.kyverno.io/description: >-
+      Blocks the shortcuts a troubleshooting agent reaches for when a distroless
+      container gives it nowhere to exec: privileged mode, privilege escalation,
+      host namespaces, and hostPath mounts. These are the changes most likely to
+      arrive in an agent-authored pull request framed as "temporary debugging".
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: no-privileged-containers
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          Privileged mode and privilege escalation are not permitted. Debug with
+          an ephemeral container (kubectl debug) instead of changing the workload.
+        pattern:
+          spec:
+            =(initContainers):
+              - =(securityContext):
+                  =(privileged): "false"
+                  =(allowPrivilegeEscalation): "false"
+            containers:
+              - =(securityContext):
+                  =(privileged): "false"
+                  =(allowPrivilegeEscalation): "false"
+
+    - name: no-host-namespaces
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: "Sharing the host network, PID, or IPC namespace is not permitted."
+        pattern:
+          spec:
+            =(hostNetwork): "false"
+            =(hostPID): "false"
+            =(hostIPC): "false"
+
+    - name: no-host-path-volumes
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      validate:
+        message: >-
+          hostPath volumes are not permitted. Mounting the node filesystem to
+          "read the logs" escapes the container boundary entirely.
+        foreach:
+          - list: "request.object.spec.volumes[]"
+            deny:
+              conditions:
+                all:
+                  - key: "{{ element.keys(@) }}"
+                    operator: AnyIn
+                    value: ["hostPath"]

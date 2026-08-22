@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: parcel-tracker
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: parcel-tracker
+
+  source:
+    # Replace with your repository URL.
+    repoURL: https://github.com/REPLACE_ME/agentic-gitops-demo.git
+    targetRevision: main
+    path: chart
+    helm:
+      releaseName: parcel-tracker
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: parcel-tracker
+
+  syncPolicy:
+    automated:
+      # selfHeal is what makes the demo honest: if anyone -- human or agent --
+      # patches the live Deployment out of band, Argo CD reverts it within
+      # minutes. Git is the only durable way to change this cluster.
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+
+  # Keep enough history that a rollback during the talk is one command.
+  revisionHistoryLimit: 10

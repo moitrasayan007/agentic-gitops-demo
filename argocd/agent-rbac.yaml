@@ -1,0 +1,53 @@
+# Kubernetes RBAC for the triage agent.
+#
+# The agent needs to see enough to diagnose an incident and nothing more: pod
+# status, events, logs, and the rendered Deployment spec. It has no verbs that
+# mutate anything, in any namespace. Every change it wants to make has to
+# travel through a pull request.
+#
+# Pair this ServiceAccount with an IAM role via EKS Pod Identity or IRSA if the
+# agent also needs to read CloudWatch. It does not need any AWS write access.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: triage-agent
+  namespace: parcel-tracker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: triage-agent-read
+  namespace: parcel-tracker
+rules:
+  - apiGroups: [""]
+    resources:
+      - pods
+      - pods/log
+      - events
+      - services
+      - configmaps
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - replicasets
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources:
+      - pods
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: triage-agent-read
+  namespace: parcel-tracker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: triage-agent-read
+subjects:
+  - kind: ServiceAccount
+    name: triage-agent
+    namespace: parcel-tracker
