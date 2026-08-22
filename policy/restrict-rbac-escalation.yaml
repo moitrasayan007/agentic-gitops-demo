@@ -46,9 +46,9 @@ spec:
             deny:
               conditions:
                 any:
-                  - key: "*"
+                  - key: "{{ element.verbs || `[]` }}"
                     operator: AnyIn
-                    value: "{{ element.verbs || [] }}"
-                  - key: "*"
+                    value: ["*"]
+                  - key: "{{ element.resources || `[]` }}"
                     operator: AnyIn
-                    value: "{{ element.resources || [] }}"
+                    value: ["*"]
