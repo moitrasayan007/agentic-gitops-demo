@@ -15,14 +15,17 @@ service:
 # Size of the in-memory route cache the app allocates at startup.
 cacheMB: 192
 
-# Container resources. Tuned down during the last cost-optimization pass.
+# Container resources. The app allocates an in-memory route cache of
+# `cacheMB` (192 MiB) at startup, so the memory limit must exceed that plus
+# runtime overhead. The previous cost-optimization pass cut the limit to 64Mi,
+# which is below the cache size and caused a startup OOMKill loop (INC-4821).
 resources:
   requests:
     cpu: 50m
-    memory: 32Mi
+    memory: 192Mi
   limits:
     cpu: 500m
-    memory: 64Mi
+    memory: 256Mi
 
 podSecurityContext:
   runAsNonRoot: true
