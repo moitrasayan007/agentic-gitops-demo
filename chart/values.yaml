@@ -24,10 +24,10 @@ cacheMB: 192
 resources:
   requests:
     cpu: 50m
-    memory: 32Mi
+    memory: 192Mi
   limits:
     cpu: 500m
-    memory: 64Mi
+    memory: 256Mi
 
 podSecurityContext:
   runAsNonRoot: true
