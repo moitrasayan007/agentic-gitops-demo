@@ -15,19 +15,24 @@ service:
 # Size of the in-memory route cache the app allocates at startup.
 cacheMB: 192
 
-# The demo's planted defect: the container is capped at 64Mi while the app
-# warms a 192 MiB cache, so it is OOMKilled during startup and never goes Ready.
+# The app allocates an in-memory route cache of `cacheMB` (192 MiB) at startup,
+# so the container needs a limit comfortably above that plus Go runtime
+# overhead. It was capped at 64Mi, which OOMKilled it mid-warmup before the
+# startup probe could ever pass.
 #
-# Set memory to 256Mi to see the healthy state. Leave it at 64Mi to run the
-# incident. Do NOT delete the limits block -- the policy gate rejects workloads
-# without one, which is the second half of the demo.
+# limits.memory = 256Mi gives 192 MiB of cache ~64 MiB of headroom.
+# requests.memory = 192Mi so the scheduler accounts for the cache the pod
+# actually holds resident for its whole life, instead of the old 32Mi.
+#
+# Keep the limits block: the require-resource-limits policy rejects workloads
+# without one, so raising the limit -- not removing it -- is the correct fix.
 resources:
   requests:
     cpu: 50m
-    memory: 32Mi
+    memory: 192Mi
   limits:
     cpu: 500m
-    memory: 64Mi
+    memory: 256Mi
 
 podSecurityContext:
   runAsNonRoot: true
